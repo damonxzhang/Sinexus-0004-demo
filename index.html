@@ -174,7 +174,7 @@
     <div class="row">
       <div class="col-lg-6 mb-3">
         <div class="panel bg-panel">
-          <div class="panel-title">近 30 天每日测试提交数 <span class="tag">按天</span></div>
+          <div class="panel-title">近 30 天每日测试提交数 <span class="tag" id="trend-range">按天</span></div>
           <div class="panel-body p-2"><div id="ov-line" class="chart-wrap"></div></div>
         </div>
       </div>
@@ -443,11 +443,22 @@ const rand=mulberry32(20211004);
 const pick=arr=>arr[Math.floor(rand()*arr.length)];
 const ri=(a,b)=>a+Math.floor(rand()*(b-a+1));
 
-const DEMO_NOW=new Date(2026,10,6,9,30,0); // 演示锚定时间：2026-11-06 09:30:00；所有图表时间轴与历史数据均对齐至 11月6日
-const TODAY=DEMO_NOW;
-const REAL_BASE=Date.now();
-function demoNow(){return new Date(DEMO_NOW.getTime()+(Date.now()-REAL_BASE));} // 以 11月6日 为基准、按真实秒数向前走动的演示时间
+/* ---- 时间基准：一律对齐运行环境的真实系统时间 ----
+   无论何时打开页面，"现在"就是此刻；历史数据自动回溯 30 天到真实的今天。
+   所有时间戳均由真实时间派生，绝不出现晚于此刻的"未来时间"。 */
+const BOOT_AT=new Date();              // 页面加载的真实时刻（系统时间）
+const TODAY=new Date(BOOT_AT);         // "今天" = 真实今天
+function demoNow(){return new Date();} // 实时时间即系统当前时间
 function daysAgo(d){const x=new Date(TODAY);x.setDate(x.getDate()-d);return x;}
+function startOfToday(){const x=new Date();x.setHours(0,0,0,0);return x;}
+function minutesToday(){return Math.floor((Date.now()-startOfToday().getTime())/60000);} // 今天已过去的分钟数
+// 取"今天、且此刻之前"的随机时刻（agoMin 分钟前），保证不会生成未来时间
+function pastTimeToday(minAgo,maxAgo){
+  const cap=Math.max(1,minutesToday());
+  let lo=Math.min(minAgo,cap), hi=Math.min(maxAgo,cap);
+  if(hi<lo)hi=lo;
+  return new Date(Date.now()-ri(lo,hi)*60000);
+}
 function fmt(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;}
 function fmtDate(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
 
@@ -503,7 +514,7 @@ for(let i=0;i<runningCount;i++){
   const gc=Math.min(t.reqGpu, exec.gpus.filter(g=>g.status==='idle').length);
   const used=assignGpus(exec, gc);
   const st = rand()<0.3?'active':'running';
-  const date=daysAgo(0); date.setHours(ri(6,13),ri(0,59),ri(0,59));
+  const date=pastTimeToday(8,95); // 今天、8~95 分钟前提交（此刻仍在运行，与时长相符）
   jobs.push({id:nextId++, test:t.name, framework:t.framework, dataset:t.dataset, task:t.task,
     gpuCount:gc, priority:pick(priorities), submitter:pick(submitters), submitTime:date,
     status:st, executor: exec.host, gpusUsed:used, durationMin:null, virtual:t.virtual,
@@ -512,18 +523,25 @@ for(let i=0;i<runningCount;i++){
 
 // 近 30 天历史作业
 for(let d=0; d<30; d++){
-  const n=ri(3,11);
+  // 今天（d=0）按"已过去的时间占全天比例"缩减作业量，避免凌晨打开就看到一整天的数据
+  const passedRatio = d===0 ? Math.min(1, Math.max(1/24, minutesToday()/1440)) : 1;
+  const n = d===0 ? Math.max(1, Math.round(ri(3,11)*passedRatio)) : ri(3,11);
   for(let i=0;i<n;i++){
     const t=pick(tests);
     const exec=pick(executors);
     const gc=Math.min(t.reqGpu, exec.total);
-    const status = d===0 ? pick(['finished','finished','failed','cancelled','timedout']) : pick(STATUSES.filter(s=>s!=='running'&&s!=='active'));
-    const date=daysAgo(d); date.setHours(ri(0,23),ri(0,59),ri(0,59));
+    const status = d===0 ? pick(['finished','finished','failed','cancelled']) : pick(STATUSES.filter(s=>s!=='running'&&s!=='active'));
+    // 今天：时刻限定在此刻之前；往日：当天任意时刻
+    const date = d===0 ? pastTimeToday(2, Math.max(3, minutesToday())) : daysAgo(d);
+    if(d!==0) date.setHours(ri(0,23),ri(0,59),ri(0,59));
     let durationMin=null, logUrl=null, cmd=null, gpusUsed=null;
     if(status==='running'){ const e2=pick(executors.filter(e=>e.gpus.filter(g=>g.status==='idle').length>=1)); if(e2){gpusUsed=assignGpus(e2,gc);} }
     else if(status==='active'){ /* queued, no executor */ }
     else {
       durationMin = status==='timedout'? t.timeout+ri(1,5) : ri(3, t.timeout);
+      // 结束时刻不得晚于此刻：今天的数据按"已过去的时间"封顶，杜绝未来时间
+      const elapsedMin = Math.max(2, Math.floor((Date.now()-date.getTime())/60000));
+      durationMin = Math.max(1, Math.min(durationMin, elapsedMin-1));
       logUrl=`http://10.9.0.55:5000/log/${nextId}`;
       cmd=buildCmd(t, gc, status, exec.model);
     }
@@ -595,8 +613,13 @@ function renderOverview(){
   // 折线：每日提交数
   const days=[...Array(30).keys()].map(d=>fmtDate(daysAgo(29-d))).sort();
   const perDay=days.map(d=>jobs.filter(j=>fmtDate(j.submitTime)===d).length);
+  // 统计区间随真实日期滚动，末端始终是"今天"
+  const rg=document.getElementById('trend-range');
+  if(rg) rg.textContent=`${days[0]} ~ ${days[days.length-1]}`;
   Plotly.react('ov-line',[{x:days,y:perDay,type:'scatter',mode:'lines+markers',line:{color:'#2f6fd0'}}],
-    {margin:{t:10,r:10,b:40,l:35},xaxis:{tickangle:-45,tickfont:{size:9}},yaxis:{title:'提交数'}},{displayModeBar:false,responsive:true});
+    {margin:{t:26,r:10,b:40,l:35},xaxis:{tickangle:-45,tickfont:{size:9}},yaxis:{title:'提交数'},
+     annotations:[{x:days[days.length-1],y:perDay[perDay.length-1],text:'今日进行中',showarrow:true,arrowhead:2,ax:0,ay:-26,font:{size:9,color:'#8e9bb0'}}]},
+    {displayModeBar:false,responsive:true});
 
   // 饼图：作业状态分布
   const order=['finished','failed','running','active','cancelled','timedout'];
@@ -919,7 +942,13 @@ function simulateStep(){
       if(j.progress>=1){
         j.progress=1; const fail=rand()<0.12;
         j.status=fail?'failed':'finished';
-        j.durationMin=Math.max(1,Math.round((j.timeout||60)*(fail?(0.3+rand()*0.6):(0.5+rand()*0.5))));
+        // 时长按"提交 → 此刻"的真实经过时间计算（并受 timeout 约束），
+        // 保证 提交时间 + 时长 ≤ 此刻，绝不出现未来的完成时间
+        const doneAt=demoNow();
+        let dm=Math.floor((doneAt.getTime()-j.submitTime.getTime())/60000);
+        if(dm<1){ dm=1; j.submitTime=new Date(doneAt.getTime()-60000); }
+        if(j.timeout) dm=Math.min(dm, j.timeout);
+        j.durationMin=dm;
         const tt=testByName[j.test]||{name:j.test,dataset:j.dataset,framework:j.framework,task:j.task,docker:'—',timeout:j.timeout};
         j.cmd=buildCmd(tt, j.gpuCount, j.status, (execByHost[j.executor]||{}).model||'X200');
         j.logUrl=`http://10.9.0.55:5000/log/${j.id}`;
