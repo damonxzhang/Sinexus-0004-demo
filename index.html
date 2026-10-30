@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sinexus-0004 芯桥软件显卡测试管理系统 v1.0 · 演示 Demo</title>
+<!-- Bootstrap 4（与原始系统前端一致：Bootstrap + Jinja2）— 本地优先，CDN 兜底 -->
+<link rel="stylesheet" href="vendor/bootstrap.min.css" onerror="this.onerror=null;document.write('<link rel=\'stylesheet\' href=\'https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css\'>')">
+<!-- Plotly.js（图表库）— 本地优先，CDN 兜底 -->
+<script src="vendor/plotly.min.js" charset="utf-8" onerror="this.onerror=null;document.write('<script src=\'https://cdn.plot.ly/plotly-2.35.2.min.js\' charset=\'utf-8\'><\/script>')"></script>
+<style>
+  :root{
+    --brand:#2f6fd0;        /* 芯桥蓝 品牌色 */
+    --brand-dark:#1f4f9e;
+    --panel:#eef4fb;        /* 浅蓝面板背景 */
+    --ink:#222;
+    --warn:#e67e22;
+    --danger:#e74c3c;
+    --ok:#1e8e3e;
+  }
+  body{background:#f4f6f8;color:var(--ink);font-size:14px;}
+  .navbar-brand{font-weight:700;letter-spacing:.5px;}
+  .navbar-brand .logo-dot{display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--brand);margin-right:8px;vertical-align:middle;}
+  .nav-link.active{background:rgba(47,111,208,.20);border-radius:6px;color:#fff!important;font-weight:600;}
+  .view{display:none;}
+  .view.active{display:block;}
+  .panel{background:#fff;border:1px solid #e3e8ee;border-radius:10px;box-shadow:0 2px 10px rgba(20,40,60,.05);}
+  .panel-title{font-weight:700;font-size:15px;padding:12px 16px;border-bottom:1px solid #eef2f6;display:flex;align-items:center;justify-content:space-between;}
+  .panel-title .tag{font-size:12px;font-weight:500;color:#7a8a98;}
+  .panel-body{padding:0;}
+  .chart-wrap{width:100%;height:320px;}
+  .bg-panel{background:var(--panel)!important;}
+  .table thead th{background:#eef3fa;border-top:none;font-size:12.5px;white-space:nowrap;}
+  .table td{font-size:13px;vertical-align:middle;}
+  .row-fail{color:#d6332e;font-weight:700;}
+  tr.row-fail td{background:#fff5f4;}
+  .badge-pass{background:var(--ok);color:#fff;}
+  .badge-fail{background:var(--danger);color:#fff;}
+  .badge-run{background:var(--brand);color:#fff;}
+  .badge-active{background:#8e9bb0;color:#fff;}
+  .badge-cancel{background:#95a5a6;color:#fff;}
+  .badge-time{background:var(--warn);color:#fff;}
+  .badge-virtual{background:#9b59b6;color:#fff;}
+  .pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;background:#eef2f6;color:#566;}
+  .priority-low{color:#7f8c8d;font-weight:600;}
+  .priority-normal{color:#2f6fd0;font-weight:600;}
+  .priority-high{color:#e67e22;font-weight:700;}
+  .priority-critical{color:#e74c3c;font-weight:700;}
+  .clk{cursor:pointer;}
+  .filters label{font-weight:600;font-size:12px;color:#667;}
+  .stat-box{background:linear-gradient(135deg,#2f6fd0,#1f4f9e);color:#fff;border-radius:10px;padding:14px 16px;margin-bottom:14px;}
+  .stat-box .n{font-size:26px;font-weight:800;line-height:1;}
+  .stat-box .l{font-size:12px;opacity:.92;margin-top:4px;}
+  .stat-box.green{background:linear-gradient(135deg,#27ae60,#1e8e3e);}
+  .stat-box.orange{background:linear-gradient(135deg,#e67e22,#c9690f);}
+  .stat-box.gray{background:linear-gradient(135deg,#5b6b80,#3f4c5e);}
+  .foot{padding:18px 0 40px;text-align:center;color:#9aa7b1;font-size:12px;}
+  .legend-note{font-size:11px;color:#8a97a3;padding:6px 16px;}
+  .modal .table td,.modal .table th{font-size:12.5px;}
+  .hl{background:#fff8c4!important;}
+  .toast-msg{position:fixed;right:18px;bottom:18px;z-index:2000;display:none;max-width:380px;}
+  .section-h{font-size:18px;font-weight:700;margin:4px 0 14px;}
+  .doc-tip{background:#fffaf0;border:1px solid #f3e2bf;color:#8a6d3b;border-radius:8px;padding:10px 14px;font-size:12.5px;margin-bottom:16px;}
+  .btn-brand{background:var(--brand);border-color:var(--brand);color:#fff;}
+  .btn-brand:hover{background:var(--brand-dark);border-color:var(--brand-dark);color:#fff;}
+  .gpu-chip{display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:6px;font-size:11px;font-weight:700;margin:2px;color:#fff;}
+  .gpu-idle{background:#27ae60;}
+  .gpu-busy{background:#e74c3c;}
+  .console{background:#0f1b2d;color:#bfe3ff;font-family:Consolas,Menlo,monospace;font-size:12px;border-radius:8px;padding:12px;height:300px;overflow:auto;white-space:pre-wrap;}
+  .console .m-exec{color:#7fd1ff;}
+  .console .m-mgr{color:#ffd479;}
+  .console .m-ok{color:#7CFC9B;}
+  .console .m-err{color:#ff8c8c;}
+  .arch-svg text{font-size:12px;}
+  .submit-card{max-width:760px;margin:0 auto;}
+  pre.cmd{background:#0f1b2d;color:#cdeaff;padding:12px;border-radius:8px;font-size:12px;max-height:340px;overflow:auto;}
+  /* —— 实时 / 直播 相关样式 —— */
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(39,174,96,.6);}70%{box-shadow:0 0 0 7px rgba(39,174,96,0);}100%{box-shadow:0 0 0 0 rgba(39,174,96,0);}}
+  .live-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#27ae60;animation:pulse 1.6s infinite;vertical-align:middle;margin-right:6px;}
+  .nav-clock{font-variant-numeric:tabular-nums;font-feature-settings:"tnum";}
+  .live-badge{display:inline-flex;align-items:center;background:rgba(39,174,96,.15);color:#7CFC9B;border:1px solid rgba(39,174,96,.4);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;}
+  .progress-mini{height:6px;background:#e3e8ee;border-radius:4px;overflow:hidden;margin-top:3px;}
+  .progress-mini>div{height:100%;background:linear-gradient(90deg,#2f6fd0,#27ae60);transition:width .8s ease;}
+  .activity{background:#0f1b2d;color:#d6e8ff;border-radius:8px;padding:10px 12px;height:300px;overflow:auto;font-family:Consolas,Menlo,monospace;font-size:12px;}
+  .act-item{padding:3px 0;border-bottom:1px solid rgba(255,255,255,.06);display:flex;gap:8px;align-items:baseline;}
+  .act-time{color:#7f9bbf;flex:0 0 auto;font-size:11px;}
+  .act-dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto;align-self:center;}
+  .act-new .act-dot{background:#2f6fd0;} .act-start .act-dot{background:#27ae60;}
+  .act-finished .act-dot{background:#27ae60;} .act-failed .act-dot{background:#e74c3c;}
+  .act-failed{color:#ff9b8e;}
+  .live-tag{font-size:11px;color:#27ae60;font-weight:700;margin-left:6px;}
+</style>
+</head>
+<body>
+
+<!-- 顶部导航栏 -->
+<nav class="navbar navbar-expand-lg navbar-dark" style="background:#16243a;">
+  <span class="navbar-brand"><span class="logo-dot"></span>Sinexus-0004 显卡测试管理</span>
+  <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#nav">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+  <div class="collapse navbar-collapse" id="nav">
+    <ul class="navbar-nav mr-auto">
+      <li class="nav-item"><a class="nav-link active" data-view="overview" href="#">状态概览</a></li>
+      <li class="nav-item"><a class="nav-link" data-view="submit" href="#">测试提交</a></li>
+      <li class="nav-item"><a class="nav-link" data-view="jobs" href="#">作业表</a></li>
+      <li class="nav-item"><a class="nav-link" data-view="tests" href="#">测试表</a></li>
+      <li class="nav-item"><a class="nav-link" data-view="gpumodels" href="#">GPU型号表</a></li>
+      <li class="nav-item"><a class="nav-link" data-view="gpus" href="#">显卡资源</a></li>
+      <li class="nav-item"><a class="nav-link" data-view="protocol" href="#">C/S通信</a></li>
+    </ul>
+    <span class="navbar-text text-light ml-auto d-none d-md-flex align-items-center mr-2">
+      <span class="live-badge mr-2"><span class="live-dot"></span>实时</span>
+      <span class="nav-clock" id="nav-clock" style="font-size:13px;">--:--:--</span>
+      <span class="ml-2" id="nav-sync" style="font-size:11px;opacity:.7;">同步中…</span>
+    </span>
+    <button class="btn btn-sm btn-outline-light" id="live-toggle" style="font-size:11px;">⏸ 暂停实时</button>
+  </div>
+</nav>
+
+<div class="container-fluid pt-3">
+
+  <!-- ============ 1. 状态概览 ============ -->
+  <section class="view active" id="view-overview">
+    <div class="section-h">状态概览</div>
+    <div class="doc-tip">“芯桥软件显卡测试管理系统 v1.0”基于 数据库+Web 形式开发：后端 MySQL + Flask，前端 Bootstrap + Jinja2。系统由 <b>Test manager（服务器）</b>、<b>Test executor（客户端，跑测试）</b> 与 <b>WebUI</b> 组成，三者以数据库为中心协同。本页汇总当前 GPU 资源、作业状态与近 30 天趋势。</div>
+
+    <!-- 架构简图 -->
+    <div class="panel mb-3">
+      <div class="panel-title">系统架构（流程简图） <span class="tag">Test manager / Test executor / WebUI</span></div>
+      <div class="panel-body p-3">
+        <svg class="arch-svg" viewBox="0 0 860 200" width="100%" style="max-height:240px;">
+          <defs>
+            <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+              <path d="M0,0 L8,3 L0,6 Z" fill="#2f6fd0"/>
+            </marker>
+          </defs>
+          <rect x="40" y="70" width="150" height="60" rx="8" fill="#2f6fd0"/>
+          <text x="115" y="98" fill="#fff" text-anchor="middle" font-weight="700">WebUI</text>
+          <text x="115" y="116" fill="#cfe0fb" text-anchor="middle" font-size="10">浏览器提交/查看</text>
+
+          <rect x="355" y="30" width="150" height="60" rx="8" fill="#1f4f9e"/>
+          <text x="430" y="58" fill="#fff" text-anchor="middle" font-weight="700">Test manager</text>
+          <text x="430" y="76" fill="#cfe0fb" text-anchor="middle" font-size="10">分发/轮询/回收</text>
+
+          <rect x="355" y="110" width="150" height="60" rx="8" fill="#27ae60"/>
+          <text x="430" y="138" fill="#fff" text-anchor="middle" font-weight="700">MySQL 数据库</text>
+          <text x="430" y="156" fill="#d8f5e3" text-anchor="middle" font-size="10">作业/设备/结果</text>
+
+          <rect x="675" y="70" width="150" height="60" rx="8" fill="#e67e22"/>
+          <text x="750" y="98" fill="#fff" text-anchor="middle" font-weight="700">Test executor</text>
+          <text x="750" y="116" fill="#ffe6cc" text-anchor="middle" font-size="10">实际跑测试(可多台)</text>
+
+          <line x1="190" y1="100" x2="350" y2="100" stroke="#2f6fd0" stroke-width="2" marker-end="url(#arr)"/>
+          <text x="270" y="92" fill="#1f4f9e" font-size="11">读写 / 查询</text>
+          <line x1="430" y1="90" x2="430" y2="108" stroke="#2f6fd0" stroke-width="2" marker-end="url(#arr)"/>
+          <line x1="430" y1="110" x2="430" y2="92" stroke="#2f6fd0" stroke-width="2" marker-end="url(#arr)"/>
+          <line x1="505" y1="60" x2="670" y2="90" stroke="#2f6fd0" stroke-width="2" marker-end="url(#arr)"/>
+          <text x="595" y="62" fill="#1f4f9e" font-size="11">分发测试</text>
+          <line x1="670" y1="110" x2="508" y2="135" stroke="#2f6fd0" stroke-width="2" marker-end="url(#arr)"/>
+          <text x="595" y="140" fill="#1f4f9e" font-size="11">JOB DONE / 状态</text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- KPI -->
+    <div class="row">
+      <div class="col-lg-3 col-md-6"><div class="stat-box"><div class="n" id="kpi-exec">0</div><div class="l">在网 Test executor（台）</div></div></div>
+      <div class="col-lg-3 col-md-6"><div class="stat-box green"><div class="n" id="kpi-gpu">0</div><div class="l">GPU 总数（块）</div></div></div>
+      <div class="col-lg-3 col-md-6"><div class="stat-box orange"><div class="n" id="kpi-busy">0</div><div class="l">忙碌 GPU / 空闲 GPU</div></div></div>
+      <div class="col-lg-3 col-md-6"><div class="stat-box gray"><div class="n" id="kpi-jobs">0</div><div class="l">近 30 天作业总数</div></div></div>
+    </div>
+
+    <div class="row">
+      <div class="col-lg-6 mb-3">
+        <div class="panel bg-panel">
+          <div class="panel-title">近 30 天每日测试提交数 <span class="tag">按天</span></div>
+          <div class="panel-body p-2"><div id="ov-line" class="chart-wrap"></div></div>
+        </div>
+      </div>
+      <div class="col-lg-6 mb-3">
+        <div class="panel bg-panel">
+          <div class="panel-title">作业状态分布 <span class="tag">近30天</span></div>
+          <div class="panel-body p-2"><div id="ov-pie" class="chart-wrap"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-lg-6 mb-3">
+        <div class="panel bg-panel">
+          <div class="panel-title">各 GPU 型号数量占比 <span class="tag">按块</span></div>
+          <div class="panel-body p-2"><div id="ov-bar" class="chart-wrap"></div></div>
+        </div>
+      </div>
+      <div class="col-lg-6 mb-3">
+        <div class="panel">
+          <div class="panel-title">最近提交的作业 <span class="tag">按时间倒序</span></div>
+          <div class="panel-body" style="padding:0 8px 8px;">
+            <table class="table table-sm table-hover mb-0" id="ov-latest">
+              <thead><tr><th>ID</th><th>测试</th><th>GPU#</th><th>优先级</th><th>状态</th><th>提交时间</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 实时活动流 -->
+    <div class="row">
+      <div class="col-12">
+        <div class="panel">
+          <div class="panel-title">实时活动流（Live Activity）<span class="tag"><span class="live-tag">● LIVE</span> 系统运行事件流</span></div>
+          <div class="panel-body p-2"><div class="activity" id="activity-list"></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 2. 测试提交 ============ -->
+  <section class="view" id="view-submit">
+    <div class="section-h">测试提交（Test Submission）</div>
+    <div class="doc-tip">用户在测试提交页面向 Web 服务器 POST 一个表单，Web 后端将测试请求写入数据库，生成一条新的作业（job）记录。表单包含：① 测试选择　② GPU 数目选择（1~8，一般选 2ⁿ）　③ 测试优先级（low/normal/high/critical）　④ 超时设置。选择 high/critical 时需填写理由。</div>
+    <div class="panel submit-card">
+      <div class="panel-title">提交新测试作业</div>
+      <div class="panel-body p-3">
+        <form id="submit-form">
+          <div class="form-group">
+            <label class="font-weight-bold">① 测试选择（Test）</label>
+            <select id="s-test" class="form-control form-control-sm"></select>
+            <small class="form-text text-muted" id="s-test-info"></small>
+          </div>
+          <div class="form-group">
+            <label class="font-weight-bold">② GPU 数目选择（1~8 块）</label>
+            <select id="s-gpu" class="form-control form-control-sm"></select>
+            <small class="form-text text-muted">同一测试可跑在不同数目 GPU 上；数目越多通常越快。当前安装显卡最多的服务器有 8 块，一般选 2ⁿ 块。</small>
+          </div>
+          <div class="form-group">
+            <label class="font-weight-bold">③ 测试优先级</label>
+            <select id="s-prio" class="form-control form-control-sm">
+              <option value="low">low（低）</option>
+              <option value="normal" selected>normal（默认）</option>
+              <option value="high">high（高）</option>
+              <option value="critical">critical（紧急）</option>
+            </select>
+          </div>
+          <div class="form-group" id="s-reason-box" style="display:none;">
+            <label class="font-weight-bold text-danger">高优先级理由（必填）</label>
+            <textarea id="s-reason" class="form-control form-control-sm" rows="2" placeholder="请说明选择 high / critical 的原因，例如紧急项目需求…"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="font-weight-bold">④ 超时设置（分钟）</label>
+            <input id="s-timeout" type="number" min="1" class="form-control form-control-sm" style="max-width:200px;">
+            <small class="form-text text-muted">测试开始后运行超过该时间仍未正常结束，Test executor 会强制终止并置为 TIMEDOUT。</small>
+          </div>
+          <div class="form-group">
+            <label class="font-weight-bold">提交人</label>
+            <input id="s-user" class="form-control form-control-sm" style="max-width:240px;" value="zhangxin">
+          </div>
+          <button type="submit" class="btn btn-brand">提交测试（POST → 数据库）</button>
+        </form>
+        <div id="submit-result"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 3. 作业表 ============ -->
+  <section class="view" id="view-jobs">
+    <div class="section-h">作业表（Job list）</div>
+    <div class="doc-tip">作业（job）与数据库记录一一对应。可查看作业列表（已完成 / 未完成），点击完成作业的 log/cmd output 链接查看命令输出；未完成的（running / active）作业可取消，以回收测试资源。</div>
+    <div class="panel">
+      <div class="panel-body p-3">
+        <div class="filters form-inline mb-2">
+          <label class="mr-2">状态</label>
+          <select id="f-status" class="form-control form-control-sm mr-3"></select>
+          <label class="mr-2">Executor</label>
+          <select id="f-exec" class="form-control form-control-sm mr-3"></select>
+          <label class="mr-2">优先级</label>
+          <select id="f-prio" class="form-control form-control-sm mr-3"></select>
+          <button class="btn btn-brand btn-sm" id="f-apply">Apply Filter</button>
+          <button class="btn btn-outline-secondary btn-sm ml-2" id="f-reset">Reset</button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0" id="jobs-table">
+            <thead><tr>
+              <th>ID</th><th>测试</th><th>框架</th><th>GPU#</th><th>优先级</th>
+              <th>提交人</th><th>提交时间</th><th>状态</th><th>Executor</th><th>耗时</th><th>操作</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mt-2">
+          <div class="legend-note" id="jobs-count"></div>
+          <ul class="pagination pagination-sm mb-0" id="jobs-pager"></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 4. 测试表 ============ -->
+  <section class="view" id="view-tests">
+    <div class="section-h">测试表（Test table，含虚拟测试）</div>
+    <div class="doc-tip">测试管理系统在显卡上运行各类测试（不同数据集、不同框架、训练/推理等）。其中“虚拟测试（virtual）”用于在真实 GPU 负载之外验证框架与调度流程，不占用实际算力。</div>
+    <div class="panel">
+      <div class="panel-body p-3">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0" id="tests-table">
+            <thead><tr><th>名称</th><th>数据集</th><th>框架</th><th>任务</th><th>所需GPU</th><th>Docker镜像</th><th>默认超时(分)</th><th>类型</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 5. GPU 型号表 ============ -->
+  <section class="view" id="view-gpumodels">
+    <div class="section-h">GPU 型号表（GPU model table）</div>
+    <div class="doc-tip">Test executor 启动时查询本机显卡型号、数量与状态，并在注册（REGISTER）时上报给 Test manager，用于后续作业与 executor 的匹配。下表为系统纳管的 GPU 型号信息（模拟演示数据）。</div>
+    <div class="panel">
+      <div class="panel-body p-3">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0" id="gpumodels-table">
+            <thead><tr><th>型号</th><th>架构</th><th>显存</th><th>显存带宽</th><th>FP32(TFLOPS)</th><th>FP16(TOPS)</th><th>互联带宽</th><th>用途</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 6. 显卡资源 ============ -->
+  <section class="view" id="view-gpus">
+    <div class="section-h">显卡资源（Executor GPU 状态）</div>
+    <div class="doc-tip">Test manager 在分发独占模式作业前，会向目标 executor 发送 CHECK GPU 请求确认显卡确为空闲（idle）；若被手动测试占用则标记为忙碌（busy）。下图展示各 executor 的 GPU 占用情况。</div>
+    <div class="panel bg-panel mb-3">
+      <div class="panel-title">各 Executor 空闲/忙碌 GPU 分布</div>
+      <div class="panel-body p-2"><div id="gpu-bar" class="chart-wrap" style="height:360px;"></div></div>
+    </div>
+    <div id="exec-cards" class="row"></div>
+  </section>
+
+  <!-- ============ 7. C/S 通信 ============ -->
+  <section class="view" id="view-protocol">
+    <div class="section-h">C/S 通信（Test manager ↔ Test executor）</div>
+    <div class="doc-tip">Client（test executor）与 Server（test manager）之间使用套接字（socket）通信，所有请求/响应均为 JSON 格式。主要消息类型：REGISTER / UNREGISTER / CHECK GPU + RUN JOB / CANCEL JOB / JOB DONE / PING。点击下方场景可模拟消息流。</div>
+    <div class="row">
+      <div class="col-lg-5">
+        <div class="panel">
+          <div class="panel-title">时序图（Sequence）</div>
+          <div class="panel-body p-2">
+            <svg viewBox="0 0 360 320" width="100%">
+              <defs><marker id="arr2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#2f6fd0"/></marker></defs>
+              <line x1="80" y1="20" x2="80" y2="300" stroke="#e67e22" stroke-width="2"/>
+              <line x1="280" y1="20" x2="280" y2="300" stroke="#1f4f9e" stroke-width="2"/>
+              <text x="80" y="14" text-anchor="middle" font-weight="700" fill="#e67e22">Executor</text>
+              <text x="280" y="14" text-anchor="middle" font-weight="700" fill="#1f4f9e">Manager</text>
+              <g font-size="11" fill="#333">
+                <text x="160" y="46">REGISTER →</text><line x1="84" y1="50" x2="276" y2="50" stroke="#2f6fd0" marker-end="url(#arr2)"/>
+                <text x="160" y="68">← ACK</text><line x1="276" y1="72" x2="84" y2="72" stroke="#2f6fd0" marker-end="url(#arr2)"/>
+                <text x="150" y="98">CHECK GPU →</text><line x1="84" y1="102" x2="276" y2="102" stroke="#2f6fd0" marker-end="url(#arr2)"/>
+                <text x="150" y="120">← GPU STATUS(idle)</text><line x1="276" y1="124" x2="84" y2="124" stroke="#2f6fd0" marker-end="url(#arr2)"/>
+                <text x="160" y="148">RUN JOB →</text><line x1="84" y1="152" x2="276" y2="152" stroke="#2f6fd0" marker-end="url(#arr2)"/>
+                <text x="150" y="182">JOB DONE →</text><line x1="84" y1="186" x2="276" y2="186" stroke="#2f6fd0" marker-end="url(#arr2)"/>
+                <text x="160" y="208">← 更新数据库</text><line x1="276" y1="212" x2="84" y2="212" stroke="#2f6fd0" marker-end="url(#arr2)"/>
+                <text x="160" y="242">CANCEL JOB →</text><line x1="84" y1="246" x2="276" y2="246" stroke="#2f6fd0" marker-end="url(#arr2)"/>
+                <text x="160" y="270">UNREGISTER →</text><line x1="84" y1="274" x2="276" y2="274" stroke="#2f6fd0" marker-end="url(#arr2)"/>
+                <text x="160" y="294">← ACK</text><line x1="276" y1="298" x2="84" y2="298" stroke="#2f6fd0" marker-end="url(#arr2)"/>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-7">
+        <div class="panel">
+          <div class="panel-title">消息模拟器（JSON over socket）</div>
+          <div class="panel-body p-3">
+            <div class="btn-group btn-group-sm mb-2" role="group">
+              <button class="btn btn-outline-primary" data-scene="register">注册流程</button>
+              <button class="btn btn-outline-primary" data-scene="runjob">分发执行作业</button>
+              <button class="btn btn-outline-primary" data-scene="cancel">取消作业</button>
+              <button class="btn btn-outline-primary" data-scene="ping">连接中断恢复</button>
+            </div>
+            <div class="console" id="proto-console"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- 作业日志 / cmd output 弹窗 -->
+<div class="modal fade" id="logModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="logModalTitle">作业日志</h5>
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+      </div>
+      <div class="modal-body" id="logModalBody"></div>
+      <div class="modal-footer"><button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- 取消确认弹窗 -->
+<div class="modal fade" id="cancelModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">取消作业</h5>
+        <button type="button" class="close" data-dismiss="modal">&times;</button></div>
+      <div class="modal-body" id="cancelModalBody"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">再想想</button>
+        <button type="button" class="btn btn-danger" id="cancelConfirmBtn">确定取消</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 通用提示弹窗 -->
+<div class="modal fade" id="msgModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title" id="msgTitle">提示</h5>
+        <button type="button" class="close" data-dismiss="modal">&times;</button></div>
+      <div class="modal-body" id="msgBody"></div>
+      <div class="modal-footer"><button type="button" class="btn btn-primary" data-dismiss="modal">确定</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-msg alert alert-success" id="toast"></div>
+
+<script src="vendor/jquery.slim.min.js" onerror="this.onerror=null;document.write('<script src=\'https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.slim.min.js\'><\/script>')"></script>
+<script src="vendor/bootstrap.bundle.min.js" onerror="this.onerror=null;document.write('<script src=\'https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js\'><\/script>')"></script>
+<script>
+/* ============================================================
+   模拟数据生成（seeded，保证演示一致性）
+   ============================================================ */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const rand=mulberry32(20211004);
+const pick=arr=>arr[Math.floor(rand()*arr.length)];
+const ri=(a,b)=>a+Math.floor(rand()*(b-a+1));
+
+const DEMO_NOW=new Date(2026,10,6,9,30,0); // 演示锚定时间：2026-11-06 09:30:00；所有图表时间轴与历史数据均对齐至 11月6日
+const TODAY=DEMO_NOW;
+const REAL_BASE=Date.now();
+function demoNow(){return new Date(DEMO_NOW.getTime()+(Date.now()-REAL_BASE));} // 以 11月6日 为基准、按真实秒数向前走动的演示时间
+function daysAgo(d){const x=new Date(TODAY);x.setDate(x.getDate()-d);return x;}
+function fmt(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;}
+function fmtDate(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
+
+/* ---- GPU 型号（模拟数据，仅 X200 / S200 两款） ---- */
+const gpuModels=[
+  {model:'X200', arch:'X200', mem:'64GB HBM2e', bw:'2.3TB/s', fp32:256, fp16:1024, link:'64GB/s', note:'旗舰通用GPU'},
+  {model:'S200', arch:'S200', mem:'32GB HBM2e', bw:'1.6TB/s', fp32:144, fp16:576,  link:'32GB/s', note:'主流数据中心GPU'},
+];
+
+/* ---- Test executor 主机（在网客户端） ---- */
+const executorDefs=[
+  {host:'gpu-exec-01', ip:'10.9.1.11', model:'X200',  total:8},
+  {host:'gpu-exec-02', ip:'10.9.1.12', model:'X200',  total:8},
+  {host:'gpu-exec-03', ip:'10.9.1.21', model:'S200',  total:4},
+  {host:'gpu-exec-04', ip:'10.9.1.22', model:'S200',  total:4},
+  {host:'gpu-exec-05', ip:'10.9.1.31', model:'S200',  total:2},
+  {host:'gpu-exec-06', ip:'10.9.1.32', model:'S200',  total:1},
+];
+const executors=executorDefs.map(e=>({...e, gpus:Array.from({length:e.total},(_,i)=>({id:i,status:'idle'}))}));
+
+/* ---- 测试定义（含虚拟测试） ---- */
+const tests=[
+  {name:'resnet50_imagenet_train', dataset:'ImageNet', framework:'PyTorch',    task:'training',  reqGpu:2, docker:'Sinexus/pytorch:2.1-cuda', timeout:120, virtual:false},
+  {name:'resnet50_imagenet_infer', dataset:'ImageNet', framework:'PyTorch',    task:'inference', reqGpu:1, docker:'Sinexus/pytorch:2.1-cuda', timeout:60,  virtual:false},
+  {name:'bert_large_cifar_train',  dataset:'CIFAR-100',framework:'TensorFlow', task:'training',  reqGpu:4, docker:'Sinexus/tf:2.13-cuda',     timeout:180, virtual:false},
+  {name:'yolov8_coco_infer',       dataset:'COCO',     framework:'PyTorch',    task:'inference', reqGpu:1, docker:'Sinexus/pytorch:2.1-cuda', timeout:45,  virtual:false},
+  {name:'vit_imagenet_train',      dataset:'ImageNet', framework:'PaddlePaddle',task:'training',  reqGpu:8, docker:'Sinexus/paddle:2.5-cuda',  timeout:240, virtual:false},
+  {name:'llama2_7b_infer',         dataset:'WikiText', framework:'PyTorch',    task:'inference', reqGpu:2, docker:'Sinexus/llm:0.9-cuda',     timeout:90,  virtual:false},
+  {name:'virtual_gpu_probe',       dataset:'—',        framework:'Probe',      task:'health',    reqGpu:1, docker:'Sinexus/virtual:latest',    timeout:10,  virtual:true},
+  {name:'virtual_sched_check',     dataset:'—',        framework:'Probe',      task:'scheduler', reqGpu:1, docker:'Sinexus/virtual:latest',    timeout:10,  virtual:true},
+];
+
+const submitters=['zhangxin','liwei','wangfang','chenhao','zhaolei','sunqi'];
+const priorities=['low','normal','normal','normal','high','critical']; // 偏向 normal
+const STATUSES=['finished','finished','finished','finished','failed','cancelled','timedout','running','active'];
+
+let nextId=5000;
+const jobs=[];
+
+// 先放一批 running 作业，占用部分 executor GPU
+function assignGpus(exec, n){
+  const idle=exec.gpus.filter(g=>g.status==='idle');
+  if(idle.length<n) return null;
+  const chosen=idle.slice(0,n);
+  chosen.forEach(g=>g.status='busy');
+  return chosen.map(g=>g.id);
+}
+let runningCount=ri(4,7);
+for(let i=0;i<runningCount;i++){
+  const t=pick(tests.filter(x=>!x.virtual));
+  const exec=pick(executors.filter(e=>e.gpus.filter(g=>g.status==='idle').length>=1));
+  if(!exec) break;
+  const gc=Math.min(t.reqGpu, exec.gpus.filter(g=>g.status==='idle').length);
+  const used=assignGpus(exec, gc);
+  const st = rand()<0.3?'active':'running';
+  const date=daysAgo(0); date.setHours(ri(6,13),ri(0,59),ri(0,59));
+  jobs.push({id:nextId++, test:t.name, framework:t.framework, dataset:t.dataset, task:t.task,
+    gpuCount:gc, priority:pick(priorities), submitter:pick(submitters), submitTime:date,
+    status:st, executor: exec.host, gpusUsed:used, durationMin:null, virtual:t.virtual,
+    timeout:t.timeout, logUrl:null, cmd:null, progress: st==='running'? +(0.1+rand()*0.55).toFixed(2):0});
+}
+
+// 近 30 天历史作业
+for(let d=0; d<30; d++){
+  const n=ri(3,11);
+  for(let i=0;i<n;i++){
+    const t=pick(tests);
+    const exec=pick(executors);
+    const gc=Math.min(t.reqGpu, exec.total);
+    const status = d===0 ? pick(['finished','finished','failed','cancelled','timedout']) : pick(STATUSES.filter(s=>s!=='running'&&s!=='active'));
+    const date=daysAgo(d); date.setHours(ri(0,23),ri(0,59),ri(0,59));
+    let durationMin=null, logUrl=null, cmd=null, gpusUsed=null;
+    if(status==='running'){ const e2=pick(executors.filter(e=>e.gpus.filter(g=>g.status==='idle').length>=1)); if(e2){gpusUsed=assignGpus(e2,gc);} }
+    else if(status==='active'){ /* queued, no executor */ }
+    else {
+      durationMin = status==='timedout'? t.timeout+ri(1,5) : ri(3, t.timeout);
+      logUrl=`http://10.9.0.55:5000/log/${nextId}`;
+      cmd=buildCmd(t, gc, status, exec.model);
+    }
+    jobs.push({id:nextId++, test:t.name, framework:t.framework, dataset:t.dataset, task:t.task,
+      gpuCount:gc, priority:pick(priorities), submitter:pick(submitters), submitTime:date,
+      status, executor: (status==='active'?'—':exec.host), gpusUsed, durationMin,
+      virtual:t.virtual, timeout:t.timeout, logUrl, cmd});
+  }
+}
+jobs.sort((a,b)=>b.submitTime-a.submitTime);
+
+function buildCmd(t, gc, status, model){
+  const lines=[
+    `$ docker run --gpus '\"device=0,1\"' --rm ${t.docker}`,
+    `$ python3 run_test.py --test ${t.name} --gpus ${gc} --model ${model}`,
+    `[INFO] dataset=${t.dataset} framework=${t.framework} task=${t.task}`,
+    `[INFO] allocating ${gc} GPU(s) on executor...`,
+  ];
+  if(status==='finished'){ lines.push('[INFO] epoch 1/10 loss=2.31 → epoch 10/10 loss=0.42'); lines.push('[INFO] throughput=1.82k img/s'); lines.push('[RESULT] PASS  exit_code=0'); }
+  else if(status==='failed'){ lines.push('[ERROR] CUDA out of memory at step 847'); lines.push('[RESULT] FAIL  exit_code=1'); }
+  else if(status==='timedout'){ lines.push(`[WARN] exceeded timeout ${t.timeout}m`); lines.push('[RESULT] TIMEDOUT  (force killed by test executor)'); }
+  else if(status==='cancelled'){ lines.push('[INFO] job cancelled by user via WebUI'); lines.push('[RESULT] CANCELLED'); }
+  return lines.join('\n');
+}
+
+/* ============================================================
+   状态徽章 / 优先级渲染
+   ============================================================ */
+function statusBadge(s){
+  const m={finished:['badge-pass','finished'],failed:['badge-fail','failed'],running:['badge-run','running'],
+    active:['badge-active','active'],cancelled:['badge-cancel','cancelled'],timedout:['badge-time','timedout']};
+  const [c,t]=m[s]||['badge-active',s]; return `<span class="badge ${c}">${t}</span>`;
+}
+function prioSpan(p){return `<span class="priority-${p}">${p}</span>`;}
+function statusCell(j){
+  if(j.status==='running') return statusBadge(j.status)+`<div class="progress-mini"><div style="width:${Math.round((j.progress||0)*100)}%"></div></div>`;
+  if(j.status==='active') return statusBadge(j.status)+`<div class="small text-muted" style="font-size:11px;">排队中</div>`;
+  return statusBadge(j.status);
+}
+
+/* ============================================================
+   视图切换
+   ============================================================ */
+function showView(name){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  document.querySelectorAll('.nav-link').forEach(a=>a.classList.toggle('active', a.dataset.view===name));
+  if(name==='overview'){ renderOverview(); renderActivityFeed(); }
+  if(name==='submit') initSubmit();
+  if(name==='jobs') renderJobs();
+  if(name==='tests') renderTests();
+  if(name==='gpumodels') renderGpuModels();
+  if(name==='gpus') renderGpuResource();
+  if(name==='protocol') {/* lazy on button */}
+}
+document.querySelectorAll('.nav-link').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();showView(a.dataset.view);}));
+
+/* ============================================================
+   1. 状态概览
+   ============================================================ */
+function renderOverview(){
+  const totalGpu=executors.reduce((s,e)=>s+e.total,0);
+  const busyGpu=executors.reduce((s,e)=>s+e.gpus.filter(g=>g.status==='busy').length,0);
+  document.getElementById('kpi-exec').textContent=executors.length;
+  document.getElementById('kpi-gpu').textContent=totalGpu;
+  document.getElementById('kpi-busy').textContent=`${busyGpu} / ${totalGpu-busyGpu}`;
+  document.getElementById('kpi-jobs').textContent=jobs.length;
+
+  // 折线：每日提交数
+  const days=[...Array(30).keys()].map(d=>fmtDate(daysAgo(29-d))).sort();
+  const perDay=days.map(d=>jobs.filter(j=>fmtDate(j.submitTime)===d).length);
+  Plotly.react('ov-line',[{x:days,y:perDay,type:'scatter',mode:'lines+markers',line:{color:'#2f6fd0'}}],
+    {margin:{t:10,r:10,b:40,l:35},xaxis:{tickangle:-45,tickfont:{size:9}},yaxis:{title:'提交数'}},{displayModeBar:false,responsive:true});
+
+  // 饼图：作业状态分布
+  const order=['finished','failed','running','active','cancelled','timedout'];
+  const colMap={finished:'#27ae60',failed:'#e74c3c',running:'#2f6fd0',active:'#8e9bb0',cancelled:'#95a5a6',timedout:'#e67e22'};
+  const vals=order.map(s=>jobs.filter(j=>j.status===s).length);
+  Plotly.react('ov-pie',[{type:'pie',labels:order,values:vals,hole:.4,textinfo:'label+percent',
+    marker:{colors:order.map(s=>colMap[s])}}],
+    {margin:{t:10,b:10,l:10,r:10},showlegend:true},{displayModeBar:false,responsive:true});
+
+  // 柱状：各型号 GPU 数量
+  const byModel={}; gpuModels.forEach(m=>byModel[m.model]=0);
+  executors.forEach(e=>byModel[e.model]+=e.total);
+  Plotly.react('ov-bar',[{type:'bar',x:gpuModels.map(m=>m.model),y:gpuModels.map(m=>byModel[m.model]),
+    marker:{color:['#2f6fd0','#1f4f9e']}}],
+    {margin:{t:10,r:10,b:30,l:35},yaxis:{title:'块数'}},{displayModeBar:false,responsive:true});
+
+  // 最近作业
+  const tb=document.querySelector('#ov-latest tbody'); tb.innerHTML='';
+  jobs.slice(0,8).forEach(j=>{
+    const tr=document.createElement('tr'); if(j.status==='failed') tr.className='row-fail';
+    tr.innerHTML=`<td>${j.id}</td><td>${j.test}</td><td>${j.gpuCount}</td><td>${prioSpan(j.priority)}</td>
+      <td>${statusBadge(j.status)}</td><td>${fmt(j.submitTime)}</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+/* ============================================================
+   2. 测试提交
+   ============================================================ */
+function initSubmit(){
+  const st=document.getElementById('s-test');
+  st.innerHTML=tests.map(t=>`<option value="${t.name}">${t.name}（${t.framework}/${t.task}${t.virtual?' · 虚拟':''}）</option>`).join('');
+  updateTestInfo();
+  document.getElementById('s-prio').onchange=()=>{
+    const p=document.getElementById('s-prio').value;
+    document.getElementById('s-reason-box').style.display=(p==='high'||p==='critical')?'block':'none';
+  };
+  document.getElementById('s-test').onchange=()=>{updateTestInfo();};
+}
+function updateTestInfo(){
+  const t=tests.find(x=>x.name===document.getElementById('s-test').value);
+  if(!t)return;
+  const gpuSel=document.getElementById('s-gpu');
+  gpuSel.innerHTML=[1,2,3,4,5,6,7,8].map(n=>`<option ${n===Math.min(t.reqGpu,8)?'selected':''}>${n}</option>`).join('');
+  document.getElementById('s-timeout').value=t.timeout;
+  document.getElementById('s-test-info').textContent=
+    `数据集 ${t.dataset} · 框架 ${t.framework} · 任务 ${t.task} · 默认所需 GPU ${t.reqGpu} · Docker ${t.docker}${t.virtual?' · 虚拟测试':''}`;
+}
+document.getElementById('submit-form').addEventListener('submit',e=>{
+  e.preventDefault();
+  const t=tests.find(x=>x.name===document.getElementById('s-test').value);
+  const gpuCount=+document.getElementById('s-gpu').value;
+  const prio=document.getElementById('s-prio').value;
+  const timeout=+document.getElementById('s-timeout').value;
+  const user=document.getElementById('s-user').value||'anonymous';
+  const reason=document.getElementById('s-reason').value.trim();
+  if((prio==='high'||prio==='critical') && !reason){
+    showMsg('提交失败','选择 high / critical 高优先级时必须填写理由。');
+    return;
+  }
+  // 寻找可容纳的 executor（空闲 GPU 足够且不独占冲突）
+  const cand=executors.filter(e=>e.gpus.filter(g=>g.status==='idle').length>=gpuCount);
+  let exec=null, used=null;
+  if(cand.length){ exec=pick(cand); used=assignGpus(exec,gpuCount); }
+  const now=demoNow();
+  const job={id:nextId++, test:t.name, framework:t.framework, dataset:t.dataset, task:t.task,
+    gpuCount, priority:prio, submitter:user, submitTime:now,
+    status: exec?'running':'active', executor: exec?exec.host:'—', gpusUsed:used, durationMin:null,
+    virtual:t.virtual, timeout, logUrl:null, cmd:null, reason:reason||null, progress:0};
+  jobs.unshift(job);
+  const box=document.getElementById('submit-result');
+  box.innerHTML=`<div class="alert alert-success mt-3">
+      <b>提交成功 ✓</b> 已写入数据库，生成作业 <b>#${job.id}</b>。<br>
+      测试：${job.test} · GPU ${job.gpuCount} 块 · 优先级 ${prio}${reason?` · 理由：${reason}`:''}<br>
+      状态：${job.status==='running'?'running（已分发至 '+job.executor+'）':'active（排队中，等待空闲 GPU）'}
+    </div>`;
+  toast(`作业 #${job.id} 已提交`);
+  pushActivity({t:demoNow(),type:'new',text:`你提交了作业 #${job.id}：${job.test} · 优先级 ${prio}`});
+  document.getElementById('s-reason').value='';
+});
+
+/* ============================================================
+   3. 作业表
+   ============================================================ */
+let jobFilters={status:'ALL',exec:'ALL',prio:'ALL'};
+let jobPage=1; const PAGE=15;
+function initJobFilters(){
+  const fs=document.getElementById('f-status');
+  const opts=['ALL','finished','failed','running','active','cancelled','timedout'];
+  fs.innerHTML=opts.map(o=>`<option value="${o}">${o==='ALL'?'全部':o}</option>`).join('');
+  const fe=document.getElementById('f-exec');
+  fe.innerHTML='<option value="ALL">全部</option>'+executors.map(e=>`<option>${e.host}</option>`).join('');
+  const fp=document.getElementById('f-prio');
+  fp.innerHTML='<option value="ALL">全部</option>'+['low','normal','high','critical'].map(p=>`<option>${p}</option>`).join('');
+}
+function filteredJobs(){
+  return jobs.filter(j=>
+    (jobFilters.status==='ALL'||j.status===jobFilters.status)&&
+    (jobFilters.exec==='ALL'||j.executor===jobFilters.exec)&&
+    (jobFilters.prio==='ALL'||j.priority===jobFilters.prio));
+}
+function renderJobs(){
+  const data=filteredJobs();
+  const pages=Math.max(1,Math.ceil(data.length/PAGE));
+  if(jobPage>pages)jobPage=pages;
+  const slice=data.slice((jobPage-1)*PAGE,jobPage*PAGE);
+  const tb=document.querySelector('#jobs-table tbody'); tb.innerHTML='';
+  slice.forEach(j=>{
+    const tr=document.createElement('tr'); if(j.status==='failed') tr.className='row-fail';
+    const canCancel=(j.status==='running'||j.status==='active');
+    const dur=j.durationMin!=null?`${j.durationMin}分`:'—';
+    const logLink=j.logUrl?`<a class="clk" onclick="openLog(${j.id})">log</a>`:'—';
+    const op=`<button class="btn btn-outline-secondary btn-sm py-0" ${canCancel?'':'disabled'} onclick="askCancel(${j.id})">取消</button>`;
+    tr.innerHTML=`<td>${j.id}</td><td>${j.test}</td><td>${j.framework}</td><td>${j.gpuCount}</td>
+      <td>${prioSpan(j.priority)}</td><td>${j.submitter}</td><td>${fmt(j.submitTime)}</td>
+      <td>${statusCell(j)}</td><td>${j.executor}</td><td>${dur}</td>
+      <td>${logLink} / ${op}</td>`;
+    tb.appendChild(tr);
+  });
+  document.getElementById('jobs-count').textContent=`共 ${data.length} 条作业，第 ${jobPage}/${pages} 页`;
+  const pg=document.getElementById('jobs-pager'); pg.innerHTML='';
+  for(let p=1;p<=pages;p++){
+    const li=document.createElement('li'); li.className='page-item'+(p===jobPage?' active':'');
+    li.innerHTML=`<a class="page-link" href="#">${p}</a>`;
+    li.addEventListener('click',e=>{e.preventDefault();jobPage=p;renderJobs();});
+    pg.appendChild(li);
+  }
+}
+document.getElementById('f-apply').onclick=()=>{jobFilters={status:f_status.value,exec:f_exec.value,prio:f_prio.value};jobPage=1;renderJobs();};
+document.getElementById('f-reset').onclick=()=>{f_status.value='ALL';f_exec.value='ALL';f_prio.value='ALL';jobFilters={status:'ALL',exec:'ALL',prio:'ALL'};jobPage=1;renderJobs();};
+
+function openLog(id){
+  const j=jobs.find(x=>x.id===id); if(!j)return;
+  document.getElementById('logModalTitle').textContent=`作业 #${j.id} · ${j.test}`;
+  document.getElementById('logModalBody').innerHTML=`
+    <div class="row mb-2 small text-muted">
+      <div class="col-6">提交人：${j.submitter}</div><div class="col-6">Executor：${j.executor}</div>
+      <div class="col-6">GPU：${j.gpuCount} 块${j.gpusUsed?('（'+j.gpusUsed.join(', ')+'）'):''}</div>
+      <div class="col-6">状态：${j.status}</div>
+      <div class="col-12">Log URL：<code>${j.logUrl||'（未生成）'}</code></div>
+    </div>
+    <pre class="cmd">${j.cmd||'（该作业尚未产生输出）'}</pre>`;
+  $('#logModal').modal('show');
+}
+window.openLog=openLog;
+
+let cancelTarget=null;
+function askCancel(id){
+  const j=jobs.find(x=>x.id===id); if(!j)return;
+  if(!(j.status==='running'||j.status==='active')){showMsg('无法取消','只有 running / active 状态的作业可以取消。');return;}
+  cancelTarget=id;
+  document.getElementById('cancelModalBody').innerHTML=
+    `确认取消作业 <b>#${id}</b>（${j.test}，GPU ${j.gpuCount} 块）？<br>Web 后台将向 Test manager 发送取消请求，由其与 Test executor 通信完成取消，以回收测试资源。`;
+  $('#cancelModal').modal('show');
+}
+window.askCancel=askCancel;
+document.getElementById('cancelConfirmBtn').onclick=()=>{
+  const j=jobs.find(x=>x.id===cancelTarget); if(j){
+    // 释放占用的 GPU
+    const exec=executors.find(e=>e.host===j.executor);
+    if(exec&&j.gpusUsed){j.gpusUsed.forEach(gi=>{if(exec.gpus[gi])exec.gpus[gi].status='idle';});}
+    j.status='cancelled'; j.gpusUsed=null; j.durationMin=0;
+    showMsg('已取消','作业 #'+j.id+' 已取消，相关 GPU 已释放回资源池。');
+    $('#cancelModal').modal('hide');
+    renderJobs(); if(document.getElementById('view-gpus').classList.contains('active'))renderGpuResource();
+  }
+};
+
+/* ============================================================
+   4. 测试表
+   ============================================================ */
+function renderTests(){
+  const tb=document.querySelector('#tests-table tbody'); tb.innerHTML='';
+  tests.forEach(t=>{
+    tb.insertAdjacentHTML('beforeend',`<tr class="${t.virtual?'':''}">
+      <td>${t.name}</td><td>${t.dataset}</td><td>${t.framework}</td><td>${t.task}</td>
+      <td>${t.reqGpu}</td><td><code>${t.docker}</code></td><td>${t.timeout}</td>
+      <td>${t.virtual?'<span class="badge badge-virtual">virtual</span>':'<span class="badge badge-pass">真实</span>'}</td></tr>`);
+  });
+}
+
+/* ============================================================
+   5. GPU 型号表
+   ============================================================ */
+function renderGpuModels(){
+  const tb=document.querySelector('#gpumodels-table tbody'); tb.innerHTML='';
+  gpuModels.forEach(m=>{
+    tb.insertAdjacentHTML('beforeend',`<tr>
+      <td><b>${m.model}</b></td><td>${m.arch}</td><td>${m.mem}</td><td>${m.bw}</td>
+      <td>${m.fp32}</td><td>${m.fp16}</td><td>${m.link}</td><td>${m.note}</td></tr>`);
+  });
+}
+
+/* ============================================================
+   6. 显卡资源（Executor GPU 状态）
+   ============================================================ */
+function renderGpuResource(){
+  // 堆叠柱状：idle vs busy
+  const hosts=executors.map(e=>e.host);
+  const idle=executors.map(e=>e.gpus.filter(g=>g.status==='idle').length);
+  const busy=executors.map(e=>e.gpus.filter(g=>g.status==='busy').length);
+  Plotly.react('gpu-bar',[
+    {type:'bar',name:'空闲 idle',x:hosts,y:idle,marker:{color:'#27ae60'}},
+    {type:'bar',name:'忙碌 busy',x:hosts,y:busy,marker:{color:'#e74c3c'}},
+  ],{barmode:'stack',margin:{t:10,r:10,b:50,l:35},legend:{orientation:'h',y:-0.15},yaxis:{title:'GPU 块数'}},{displayModeBar:false,responsive:true});
+
+  const wrap=document.getElementById('exec-cards'); wrap.innerHTML='';
+  executors.forEach(e=>{
+    const busyN=e.gpus.filter(g=>g.status==='busy').length;
+    const chips=e.gpus.map(g=>`<span class="gpu-chip ${g.status==='idle'?'gpu-idle':'gpu-busy'}" title="GPU${g.id} ${g.status}">${g.id}</span>`).join('');
+    const modelInfo=gpuModels.find(m=>m.model===e.model);
+    wrap.insertAdjacentHTML('beforeend',`<div class="col-lg-4 col-md-6 mb-3">
+      <div class="panel"><div class="panel-title">${e.host} <span class="tag">${e.ip}</span></div>
+      <div class="panel-body p-3">
+        <div class="small text-muted mb-1">型号 ${e.model} · ${modelInfo?modelInfo.mem:'—'} · 共 ${e.total} 块</div>
+        <div>${chips}</div>
+        <div class="mt-2 small">空闲 <b class="text-success">${e.total-busyN}</b> / 忙碌 <b class="text-danger">${busyN}</b></div>
+      </div></div></div>`);
+  });
+}
+
+/* ============================================================
+   7. C/S 通信模拟器
+   ============================================================ */
+function logLine(cls,text){const c=document.getElementById('proto-console');c.insertAdjacentHTML('beforeend',`<div class="${cls}">${text}</div>`);c.scrollTop=c.scrollHeight;}
+function clearConsole(){document.getElementById('proto-console').innerHTML='';}
+const scenes={
+  register(){
+    clearConsole();
+    logLine('m-ok','▶ 场景：Test executor 启动并注册');
+    logLine('m-exec','Test executor → Test manager');
+    logLine('','{ "type":"REGISTER", "host":"gpu-exec-01", "ip":"10.9.1.11",');
+    logLine('','  "gpus":[ {"id":0,"model":"X200","status":"idle"}, ... ] }');
+    logLine('m-mgr','Test manager → Test executor  : ACK');
+    logLine('m-ok','✓ 已纳入资源池，后续可分发作业到此 executor。');
+  },
+  runjob(){
+    clearConsole();
+    logLine('m-ok','▶ 场景：分发并执行作业');
+    logLine('m-mgr','Test manager → Test executor : CHECK GPU');
+    logLine('m-exec','Test executor → Test manager : GPU STATUS (idle)');
+    logLine('m-mgr','Test manager → Test executor : RUN JOB');
+    logLine('','{ "type":"RUN_JOB", "job_id":5021, "test":"resnet50_imagenet_train",');
+    logLine('','  "gpus":[0,1], "priority":"normal", "timeout":120 }');
+    logLine('m-exec','Test executor 启动 Docker 容器，在 GPU0,1 上运行作业…');
+    logLine('m-exec','Test executor → Test manager : JOB DONE');
+    logLine('','{ "type":"JOB DONE", "job_id":5021, "result":"finished", "exit_code":0 }');
+    logLine('m-mgr','Test manager → 更新数据库（job 状态=finished）');
+    logLine('m-ok','✓ 作业完成，结果已入库。');
+  },
+  cancel(){
+    clearConsole();
+    logLine('m-ok','▶ 场景：用户通过 WebUI 取消作业');
+    logLine('m-mgr','WebUI 写数据库 → Test manager 发送 CANCEL JOB');
+    logLine('m-mgr','Test manager → Test executor : CANCEL JOB { "job_id":5033 }');
+    logLine('m-exec','Test executor 终止容器并释放 GPU…');
+    logLine('m-exec','Test executor → Test manager : JOB DONE { "result":"cancelled" }');
+    logLine('m-mgr','Test manager → 更新数据库（job 状态=cancelled），GPU 释放回资源池');
+    logLine('m-ok','✓ 作业已取消，资源回收完成。');
+  },
+  ping(){
+    clearConsole();
+    logLine('m-ok','▶ 场景：连接中断与恢复（PING）');
+    logLine('m-mgr','Test manager → Test executor : PING');
+    logLine('m-err','✗ PING 发送失败 —— 连接已中断');
+    logLine('m-mgr','Test manager 清理该 executor 并回收其上作业（重置为 active）');
+    logLine('','   → 这些作业后续会被分发到其他适配的 executor 重新运行。');
+    logLine('m-exec','(若 executor 为 PING 发起方) 取消当前作业、关闭 socket 并尝试重连…');
+    logLine('m-ok','✓ 系统具备容错能力：通信中断后可回收未完成测试。');
+  }
+};
+document.querySelectorAll('[data-scene]').forEach(b=>b.addEventListener('click',()=>scenes[b.dataset.scene]()));
+
+/* ============================================================
+   通用提示 & 初始化
+   ============================================================ */
+function showMsg(title,body){document.getElementById('msgTitle').textContent=title;document.getElementById('msgBody').innerHTML=body;$('#msgModal').modal('show');}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2600);}
+
+/* ============================================================
+   实时模拟引擎（让演示看起来像真实在运行）
+   ============================================================ */
+const testByName=Object.fromEntries(tests.map(t=>[t.name,t]));
+const execByHost=Object.fromEntries(executors.map(e=>[e.host,e]));
+const activities=[];
+let livePaused=false, liveTimer=null;
+
+function pad(n){return String(n).padStart(2,'0');}
+function renderActivityFeed(){
+  const tb=document.getElementById('activity-list'); if(!tb)return;
+  tb.innerHTML=activities.map(a=>`<div class="act-item act-${a.type}"><span class="act-time">${fmt(a.t)}</span><span class="act-dot"></span><span>${a.text}</span></div>`).join('');
+  tb.scrollTop=0;
+}
+function pushActivity(e){
+  activities.unshift(e);
+  if(activities.length>60)activities.pop();
+  const ov=document.getElementById('view-overview');
+  if(ov&&ov.classList.contains('active')) renderActivityFeed();
+}
+function tickClock(){
+  const d=demoNow();
+  const s=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  const c=document.getElementById('nav-clock'); if(c)c.textContent=s;
+  const sy=document.getElementById('nav-sync'); if(sy)sy.textContent='最近同步 '+pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+}
+function refreshActiveView(){
+  const v=document.querySelector('.view.active'); if(!v)return;
+  const name=v.id.replace('view-','');
+  if(name==='overview'){renderOverview(); renderActivityFeed();}
+  else if(name==='jobs'){renderJobs();}
+  else if(name==='gpus'){renderGpuResource();}
+}
+function simulateStep(){
+  if(livePaused)return;
+  const now=demoNow(); const ev=[];
+  // 推进 running 作业，进度满则结束（释放 GPU）
+  jobs.forEach(j=>{
+    if(j.status==='running'){
+      j.progress=(j.progress||0)+(0.04+rand()*0.12);
+      if(j.progress>=1){
+        j.progress=1; const fail=rand()<0.12;
+        j.status=fail?'failed':'finished';
+        j.durationMin=Math.max(1,Math.round((j.timeout||60)*(fail?(0.3+rand()*0.6):(0.5+rand()*0.5))));
+        const tt=testByName[j.test]||{name:j.test,dataset:j.dataset,framework:j.framework,task:j.task,docker:'—',timeout:j.timeout};
+        j.cmd=buildCmd(tt, j.gpuCount, j.status, (execByHost[j.executor]||{}).model||'X200');
+        j.logUrl=`http://10.9.0.55:5000/log/${j.id}`;
+        const ex=execByHost[j.executor]; if(ex&&j.gpusUsed){j.gpusUsed.forEach(gi=>{if(ex.gpus[gi])ex.gpus[gi].status='idle';});}
+        j.gpusUsed=null;
+        ev.push({t:now,type:j.status,text:`作业 #${j.id}（${j.test}）${fail?'运行失败 ✗':'完成 ✓'} @ ${j.executor||'—'}`});
+      }
+    }
+  });
+  // 提升 active（排队中）作业到 running
+  jobs.forEach(j=>{
+    if(j.status==='active'&&rand()<0.3){
+      const cand=executors.filter(e=>e.gpus.filter(g=>g.status==='idle').length>=Math.min(j.gpuCount,1));
+      if(cand.length){const ex=pick(cand); const gc=Math.min(j.gpuCount,ex.gpus.filter(g=>g.status==='idle').length); const used=assignGpus(ex,gc); j.executor=ex.host; j.gpusUsed=used; j.status='running'; j.progress=0; ev.push({t:now,type:'start',text:`作业 #${j.id} 已分发至 ${ex.host} 开始运行`});}
+    }
+  });
+  // 生成新作业（模拟并发提交）
+  if(rand()<0.75){
+    const t=pick(tests.filter(x=>!x.virtual||rand()<0.2));
+    const cand=executors.filter(e=>e.gpus.filter(g=>g.status==='idle').length>=1);
+    let ex=null,used=null,status='active';
+    if(cand.length&&rand()<0.85){ex=pick(cand); const gc=Math.min(t.reqGpu,ex.gpus.filter(g=>g.status==='idle').length); used=assignGpus(ex,gc); status='running';}
+    const j={id:nextId++, test:t.name, framework:t.framework, dataset:t.dataset, task:t.task, gpuCount:used?used.length:1, priority:pick(priorities), submitter:pick(submitters), submitTime:now, status, executor:ex?ex.host:'—', gpusUsed:used, durationMin:null, virtual:t.virtual, timeout:t.timeout, logUrl:null, cmd:null, progress:0};
+    jobs.unshift(j);
+    ev.push({t:now,type:'new',text:`新作业 #${j.id} 提交：${t.name} · 优先级 ${j.priority}`});
+    // 控制总量，移除最旧的已完成作业，避免无限增长
+    if(jobs.length>700){ for(let k=jobs.length-1;k>=0&&jobs.length>700;k--){ if(jobs[k].status!=='running'&&jobs[k].status!=='active') jobs.splice(k,1); } }
+  }
+  ev.forEach(pushActivity);
+  refreshActiveView();
+}
+function startLive(){
+  tickClock(); setInterval(tickClock,1000);
+  pushActivity({t:demoNow(),type:'new',text:'系统已启动，正在监听 Test executor 心跳（PING）…'});
+  liveTimer=setInterval(simulateStep,4500);
+  const btn=document.getElementById('live-toggle');
+  if(btn) btn.addEventListener('click',function(){
+    livePaused=!livePaused;
+    if(livePaused){clearInterval(liveTimer); this.textContent='▶ 继续实时'; pushActivity({t:demoNow(),type:'new',text:'⏸ 实时刷新已暂停（演示者手动控制）'});}
+    else {liveTimer=setInterval(simulateStep,4500); this.textContent='⏸ 暂停实时'; pushActivity({t:demoNow(),type:'new',text:'▶ 实时刷新已恢复'});}
+  });
+}
+
+initJobFilters();
+showView('overview');
+startLive();
+</script>
+</body>
+</html>
